@@ -10,9 +10,210 @@ import {
 import { Client as GoogleMapsClient } from "@googlemaps/google-maps-services-js";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
+// Add chalk import for formatted output
+import chalk from 'chalk';
 
 // Initialize Google Maps client
 const googleMapsClient = new GoogleMapsClient({});
+
+// Define ThoughtData interface for sequential thinking
+interface ThoughtData {
+  thought: string;
+  thoughtNumber: number;
+  totalThoughts: number;
+  isRevision?: boolean;
+  revisesThought?: number;
+  branchFromThought?: number;
+  branchId?: string;
+  needsMoreThoughts?: boolean;
+  nextThoughtNeeded: boolean;
+}
+
+// Sequential Thinking class implementation
+class SequentialThinkingServer {
+  private thoughtHistory: ThoughtData[] = [];
+  private branches: Record<string, ThoughtData[]> = {};
+
+  private validateThoughtData(input: unknown): ThoughtData {
+    const data = input as Record<string, unknown>;
+
+    if (!data.thought || typeof data.thought !== 'string') {
+      throw new Error('Invalid thought: must be a string');
+    }
+    if (!data.thoughtNumber || typeof data.thoughtNumber !== 'number') {
+      throw new Error('Invalid thoughtNumber: must be a number');
+    }
+    if (!data.totalThoughts || typeof data.totalThoughts !== 'number') {
+      throw new Error('Invalid totalThoughts: must be a number');
+    }
+    if (typeof data.nextThoughtNeeded !== 'boolean') {
+      throw new Error('Invalid nextThoughtNeeded: must be a boolean');
+    }
+
+    return {
+      thought: data.thought,
+      thoughtNumber: data.thoughtNumber,
+      totalThoughts: data.totalThoughts,
+      nextThoughtNeeded: data.nextThoughtNeeded,
+      isRevision: data.isRevision as boolean | undefined,
+      revisesThought: data.revisesThought as number | undefined,
+      branchFromThought: data.branchFromThought as number | undefined,
+      branchId: data.branchId as string | undefined,
+      needsMoreThoughts: data.needsMoreThoughts as boolean | undefined,
+    };
+  }
+
+  private formatThought(thoughtData: ThoughtData): string {
+    const { thoughtNumber, totalThoughts, thought, isRevision, revisesThought, branchFromThought, branchId } = thoughtData;
+
+    let prefix = '';
+    let context = '';
+
+    if (isRevision) {
+      prefix = chalk.yellow('🔄 Revision');
+      context = ` (revising thought ${revisesThought})`;
+    } else if (branchFromThought) {
+      prefix = chalk.green('🌿 Branch');
+      context = ` (from thought ${branchFromThought}, ID: ${branchId})`;
+    } else {
+      prefix = chalk.blue('💭 Thought');
+      context = '';
+    }
+
+    const header = `${prefix} ${thoughtNumber}/${totalThoughts}${context}`;
+    const border = '─'.repeat(Math.max(header.length, thought.length) + 4);
+
+    return `
+┌${border}┐
+│ ${header} │
+├${border}┤
+│ ${thought.padEnd(border.length - 2)} │
+└${border}┘`;
+  }
+
+  public processThought(input: unknown): { content: Array<{ type: string; text: string }>; isError?: boolean } {
+    try {
+      const validatedInput = this.validateThoughtData(input);
+
+      if (validatedInput.thoughtNumber > validatedInput.totalThoughts) {
+        validatedInput.totalThoughts = validatedInput.thoughtNumber;
+      }
+
+      this.thoughtHistory.push(validatedInput);
+
+      if (validatedInput.branchFromThought && validatedInput.branchId) {
+        if (!this.branches[validatedInput.branchId]) {
+          this.branches[validatedInput.branchId] = [];
+        }
+        this.branches[validatedInput.branchId].push(validatedInput);
+      }
+
+      const formattedThought = this.formatThought(validatedInput);
+      console.error(formattedThought);
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            thoughtNumber: validatedInput.thoughtNumber,
+            totalThoughts: validatedInput.totalThoughts,
+            nextThoughtNeeded: validatedInput.nextThoughtNeeded,
+            branches: Object.keys(this.branches),
+            thoughtHistoryLength: this.thoughtHistory.length
+          }, null, 2)
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            error: error instanceof Error ? error.message : String(error),
+            status: 'failed'
+          }, null, 2)
+        }],
+        isError: true
+      };
+    }
+  }
+}
+
+// Define the sequential thinking tool
+const SEQUENTIAL_THINKING_TOOL: Tool = {
+  name: "sequentialthinking",
+  description: `A detailed tool for dynamic and reflective medical problem-solving through thoughts.
+This tool helps analyze medical problems through a flexible thinking process that can adapt and evolve.
+Each thought can build on, question, or revise previous insights as understanding of the medical situation deepens.
+
+When to use this tool:
+- Breaking down complex medical problems into steps
+- Planning and designing treatment approaches with room for revision
+- Clinical analysis that might need course correction
+- Medical problems where the full scope might not be clear initially
+- Healthcare decisions that require a multi-step solution
+- Medical evaluations that need to maintain context over multiple steps
+- Situations where irrelevant medical information needs to be filtered out
+
+Key features:
+- You can adjust total_thoughts up or down as the diagnosis progresses
+- You can question or revise previous medical assessments
+- You can add more diagnostic thoughts as new information emerges
+- You can express clinical uncertainty and explore alternative approaches
+- Not every medical assessment needs to build linearly - you can branch or backtrack
+- Generates a clinical hypothesis
+- Verifies the hypothesis based on the Chain of Thought steps
+- Repeats the process until a satisfactory diagnosis or treatment plan is reached
+- Provides a correct medical assessment or recommendation`,
+  inputSchema: {
+    type: "object",
+    properties: {
+      thought: {
+        type: "string",
+        description: "Your current clinical thinking step"
+      },
+      nextThoughtNeeded: {
+        type: "boolean",
+        description: "Whether another medical assessment step is needed"
+      },
+      thoughtNumber: {
+        type: "integer",
+        description: "Current thought number",
+        minimum: 1
+      },
+      totalThoughts: {
+        type: "integer",
+        description: "Estimated total thoughts needed for complete evaluation",
+        minimum: 1
+      },
+      isRevision: {
+        type: "boolean",
+        description: "Whether this revises previous medical thinking"
+      },
+      revisesThought: {
+        type: "integer",
+        description: "Which medical assessment is being reconsidered",
+        minimum: 1
+      },
+      branchFromThought: {
+        type: "integer",
+        description: "Branching point thought number for alternative diagnosis",
+        minimum: 1
+      },
+      branchId: {
+        type: "string",
+        description: "Branch identifier for the diagnostic path"
+      },
+      needsMoreThoughts: {
+        type: "boolean",
+        description: "If more clinical evaluation is needed"
+      }
+    },
+    required: ["thought", "nextThoughtNeeded", "thoughtNumber", "totalThoughts"]
+  }
+};
+
+// Initialize the thinking server
+const thinkingServer = new SequentialThinkingServer();
 
 // Schema definitions
 const FindNearbyMedicalFacilitiesSchema = z.object({
@@ -80,6 +281,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       description: "Arranges emergency medical transportation",
       inputSchema: zodToJsonSchema(ScheduleEmergencyTransportSchema),
     },
+    // Add the sequential thinking tool
+    SEQUENTIAL_THINKING_TOOL,
   ],
 }));
 
@@ -87,6 +290,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   try {
+    // Handle sequential thinking tool
+    if (name === "sequentialthinking") {
+      return thinkingServer.processThought(args);
+    }
+    
     switch (name) {
       case "find_nearby_medical_facilities": {
         const validatedArgs = FindNearbyMedicalFacilitiesSchema.parse(args);
