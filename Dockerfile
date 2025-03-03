@@ -1,21 +1,15 @@
-FROM node:22-alpine as builder
-
-WORKDIR /app
+FROM node:22.12-alpine AS builder
 
 COPY . /app
-COPY tsconfig.json /app/
-
-# Install dependencies and build
-RUN --mount=type=cache,target=/root/.npm npm install
-RUN npm run build
-
-FROM node:22-alpine AS release
+COPY tsconfig.json /tsconfig.json
 
 WORKDIR /app
 
-# Create non-root user
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-USER appuser
+RUN --mount=type=cache,target=/root/.npm npm install
+
+RUN --mount=type=cache,target=/root/.npm-production npm ci --ignore-scripts --omit-dev
+
+FROM node:22-alpine AS release
 
 COPY --from=builder /app/dist /app/dist
 COPY --from=builder /app/package.json /app/package.json
@@ -23,13 +17,8 @@ COPY --from=builder /app/package-lock.json /app/package-lock.json
 
 ENV NODE_ENV=production
 
-# Install only production dependencies
-RUN --mount=type=cache,target=/home/appuser/.npm npm ci --omit=dev
+WORKDIR /app
 
-# Add healthcheck
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD node -e "try {require('http').get('http://localhost:3000/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))} catch(e) {process.exit(1)}"
-
-EXPOSE 3000
+RUN npm ci --ignore-scripts --omit-dev
 
 ENTRYPOINT ["node", "dist/index.js"]
