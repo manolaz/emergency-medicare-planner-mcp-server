@@ -1,13 +1,13 @@
-FROM node:24 as builder
+FROM node:23 as builder
 
-COPY . /app
+COPY src/emergency-medical-planner /app
 COPY tsconfig.json /tsconfig.json
 
 WORKDIR /app
 
 RUN --mount=type=cache,target=/root/.npm npm install
 
-FROM node:24 AS release
+FROM node:23 AS release
 
 WORKDIR /app
 
