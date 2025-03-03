@@ -2,7 +2,7 @@ FROM node:22-alpine as builder
 
 WORKDIR /app
 
-COPY src/emergency-medical-planner /app
+COPY . /app
 COPY tsconfig.json /app/
 
 # Install dependencies and build
