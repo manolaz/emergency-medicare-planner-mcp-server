@@ -1,4 +1,8 @@
-# Emergency Medicare Management MCP Server (@manolaz/emergency-medicare-planner-mcp-server)
+# Emergency Medicare Management MCP Server
+
+[![smithery badge](https://smithery.ai/badge/@manolaz/emergency-medicare-planner-mcp-server)](https://smithery.ai/server/@manolaz/emergency-medicare-planner-mcp-server)
+
+(@manolaz/emergency-medicare-planner-mcp-server)
 
 Emergency Medicare Management Model Context Protocol (MCP) server implementation for interacting with Google Maps and medical services. This emergency medicare management server can find nearby hospitals and clinics within 10km that match specific patient needs.
 
@@ -6,7 +10,7 @@ Emergency Medicare Management Model Context Protocol (MCP) server implementation
 
 ### Installing via Smithery
 
-To install Emergency Medicare Planner for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@manolaz/emergency-medicare-planner-mcp-server):
+To install Emergency Medicare Planner for Claude Desktop automatically via :
 
 ```bash
 npx -y @smithery/cli install @manolaz/emergency-medicare-planner-mcp-server --client claude
